@@ -60,6 +60,16 @@ and MinIO (see `Dockerfile`). The app container runs `prisma migrate
 deploy` on startup before serving traffic. Seeding is a separate manual
 step: `docker compose exec app npx prisma db seed`.
 
+## Deploying somewhere reachable from your phone
+
+For actual daily use you need this running on a server that's always
+on, not just your laptop on your home Wi-Fi. See
+[`docs/deploy-gcp-free.md`](./docs/deploy-gcp-free.md) for a $0/month
+path: a free-tier Google Cloud VM + Cloudflare R2 for photos, with
+`docker-compose.prod.yml` and a GitHub Actions workflow
+(`.github/workflows/deploy-image.yml`) that builds and publishes the
+image so the VM never has to.
+
 ## Scripts
 
 | Command | What it does |

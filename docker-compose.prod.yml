@@ -1,0 +1,88 @@
+# Production deploy for a memory-constrained free-tier VM (e.g. GCP's
+# always-free e2-micro, ~1GB RAM). Differences from docker-compose.yml:
+#   - No MinIO — photos go to Cloudflare R2 (S3_* env vars point there).
+#   - The app image is pulled from GHCR, never built on the VM — a 1GB
+#     box can't reliably run `next build` (see .github/workflows and
+#     docs/deploy-gcp-free.md).
+#   - Postgres and Node are both memory-capped to fit alongside each
+#     other and the OS.
+#   - Caddy terminates HTTPS in front of the app (see Caddyfile).
+#
+# Usage: cp .env.production.example .env, fill it in, then:
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 200m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=96MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - max_connections=20
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-larder}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+      POSTGRES_DB: "${POSTGRES_DB:-larder}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-larder}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: "${APP_IMAGE:?Set APP_IMAGE in .env}"
+    restart: unless-stopped
+    mem_limit: 320m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=192"
+      BASE_URL: "https://${DOMAIN:?Set DOMAIN in .env}"
+      AUTH_URL: "https://${DOMAIN:?Set DOMAIN in .env}"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-larder}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-larder}?schema=public"
+      AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env}"
+      S3_ENDPOINT: "${S3_ENDPOINT:?Set S3_ENDPOINT in .env}"
+      S3_REGION: auto
+      S3_BUCKET: "${S3_BUCKET:?Set S3_BUCKET in .env}"
+      S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID in .env}"
+      S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY in .env}"
+      # Path-style avoids depending on R2's wildcard subdomain routing
+      # for <bucket>.<account_id>.r2.cloudflarestorage.com.
+      S3_FORCE_PATH_STYLE: "true"
+      S3_PUBLIC_URL: "${S3_PUBLIC_URL:?Set S3_PUBLIC_URL in .env}"
+      SEED_USER_EMAIL: "${SEED_USER_EMAIL:-you@example.com}"
+      SEED_USER_PASSWORD: "${SEED_USER_PASSWORD:-changeme123}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    mem_limit: 80m
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN:?Set DOMAIN in .env}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
