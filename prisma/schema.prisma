@@ -1,0 +1,205 @@
+// Larder — Prisma schema
+// Phase 1 (Library foundation) entities only. ImportJob (Phase 2) and
+// MealPlanEntry (Phase 4) are deliberately not scaffolded yet — see
+// design doc section 12: "Do not scaffold Phase 4 tables early."
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pg_trgm]
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum SourceType {
+  WEB
+  INSTAGRAM
+  COOKBOOK
+  MANUAL
+}
+
+enum TagFacet {
+  METHOD
+  MAIN
+  MEAL
+  CUISINE
+  EFFORT
+  SEASON
+  CUSTOM
+}
+
+enum AppliedBy {
+  AUTO
+  USER
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  recipes  Recipe[]
+  tags     Tag[]
+
+  @@map("users")
+}
+
+model Recipe {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+
+  servingsYield Decimal? @map("servings_yield") @db.Decimal(6, 2)
+  servingsUnit  String?  @map("servings_unit")
+
+  prepMinutes  Int? @map("prep_minutes")
+  cookMinutes  Int? @map("cook_minutes")
+  totalMinutes Int? @map("total_minutes")
+
+  sourceType   SourceType @default(MANUAL) @map("source_type")
+  sourceUrl    String?    @map("source_url")
+  sourceName   String?    @map("source_name")
+  sourceAuthor String?    @map("source_author")
+
+  heroImageUrl String? @map("hero_image_url")
+
+  rating Int? // 1-5, user's own
+  notes  String? // free text, user's tweaks
+
+  isArchived Boolean @default(false) @map("is_archived")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Generated column (see migrations/20260816150600_search_indexes) — a
+  // stored tsvector over title/description/notes. `Unsupported` keeps
+  // Prisma Migrate from trying to manage or drop it as drift.
+  searchVector Unsupported("tsvector")? @map("search_vector")
+
+  ingredients IngredientLine[]
+  steps       Step[]
+  tags        RecipeTag[]
+  photos      RecipePhoto[]
+  cookLogs    CookLog[]
+
+  @@index([userId])
+  @@index([userId, isArchived])
+  @@map("recipes")
+}
+
+model IngredientLine {
+  id String @id @default(cuid())
+
+  recipeId String @map("recipe_id")
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  position Int
+  section  String?
+
+  rawText String @map("raw_text") // ALWAYS preserved verbatim
+
+  quantity    Decimal? @db.Decimal(8, 3)
+  quantityMax Decimal? @map("quantity_max") @db.Decimal(8, 3) // for "2-3 cloves"
+  unit        String?
+  item        String?
+  preparation String?
+
+  isOptional Boolean @default(false) @map("is_optional")
+
+  @@index([recipeId, position])
+  @@map("ingredient_lines")
+}
+
+model Step {
+  id String @id @default(cuid())
+
+  recipeId String @map("recipe_id")
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  position Int
+  section  String?
+
+  text         String
+  timerSeconds Int?   @map("timer_seconds")
+
+  @@index([recipeId, position])
+  @@map("steps")
+}
+
+model Tag {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  facet    TagFacet
+  name     String
+  isSystem Boolean  @default(false) @map("is_system")
+
+  recipes RecipeTag[]
+
+  @@unique([userId, facet, name])
+  @@index([userId, facet])
+  @@map("tags")
+}
+
+model RecipeTag {
+  recipeId String @map("recipe_id")
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  tagId String @map("tag_id")
+  tag   Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  confidence Decimal?  @db.Decimal(3, 2) // 0-1 from auto-tagger, null if user-applied
+  appliedBy  AppliedBy @default(USER) @map("applied_by")
+
+  @@id([recipeId, tagId])
+  @@index([tagId])
+  @@map("recipe_tags")
+}
+
+model RecipePhoto {
+  id String @id @default(cuid())
+
+  recipeId String @map("recipe_id")
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  url     String
+  caption String?
+  isHero  Boolean @default(false) @map("is_hero")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([recipeId])
+  @@map("recipe_photos")
+}
+
+model CookLog {
+  id String @id @default(cuid())
+
+  recipeId String @map("recipe_id")
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  cookedOn DateTime @map("cooked_on") @db.Date
+  notes    String?
+
+  @@index([recipeId, cookedOn])
+  @@map("cook_logs")
+}

@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-larder}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-larder}
+      POSTGRES_DB: ${POSTGRES_DB:-larder}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-larder}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-larder}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-larderminio}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot job that creates the recipe photo bucket on startup.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-larder} ${MINIO_ROOT_PASSWORD:-larderminio} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-larder-photos} &&
+      mc anonymous set download local/${S3_BUCKET:-larder-photos}
+      "
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-larder}:${POSTGRES_PASSWORD:-larder}@postgres:5432/${POSTGRES_DB:-larder}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env — generate with: npx auth secret}
+      AUTH_URL: ${BASE_URL:-http://localhost:3000}
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:-larder-photos}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-larder}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-larderminio}
+      S3_FORCE_PATH_STYLE: "true"
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000/larder-photos}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+volumes:
+  postgres_data:
+  minio_data:
