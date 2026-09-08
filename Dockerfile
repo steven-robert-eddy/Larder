@@ -22,6 +22,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Prisma's engines need OpenSSL to detect the libssl version; node:22-slim
+# doesn't include it, which otherwise produces a (non-fatal, but noisy)
+# "failed to detect the libssl/openssl version" warning on every command.
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs
 
