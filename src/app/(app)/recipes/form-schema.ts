@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { recipeFormSchema } from "@/lib/validation";
 
 export type RecipeFormState = {
@@ -25,4 +26,13 @@ export function parseRecipeFormData(formData: FormData) {
   };
 
   return recipeFormSchema.safeParse(raw);
+}
+
+export function flattenZodErrors(error: z.ZodError) {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = issue.path.map(String).join(".") || "form";
+    if (!out[key]) out[key] = issue.message;
+  }
+  return out;
 }

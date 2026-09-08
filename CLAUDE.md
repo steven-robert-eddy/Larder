@@ -4,9 +4,12 @@
 
 Personal recipe library + meal planner. Full design doc: `docs/design.md`
 — read it before making structural changes. Currently implemented:
-**Phase 1 (Library foundation)** only. Follow the phase order in design
-doc section 11; don't scaffold a later phase's tables or features "since
-we're in there."
+**Phase 1 (Library foundation)**, plus the structured-data slice of
+**Phase 2 (Import)** — URL → `schema.org/Recipe` JSON-LD → review screen.
+The AI fallback, paste-a-blob, auto-tagging, and job queue pieces of
+Phase 2 are still open (see README's "Open scope within Phase 2").
+Follow the phase order in design doc section 11; don't scaffold a later
+phase's tables or features "since we're in there."
 
 Key conventions from the design doc (section 12) that apply to all future
 phases:

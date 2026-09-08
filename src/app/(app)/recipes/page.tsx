@@ -41,12 +41,20 @@ export default async function RecipesPage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Recipes</h1>
-        <Link
-          href="/recipes/new"
-          className="hidden rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white sm:block dark:bg-neutral-100 dark:text-neutral-900"
-        >
-          + New recipe
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/import"
+            className="text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+          >
+            Import
+          </Link>
+          <Link
+            href="/recipes/new"
+            className="hidden rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white sm:block dark:bg-neutral-100 dark:text-neutral-900"
+          >
+            + New recipe
+          </Link>
+        </div>
       </div>
 
       <FilterBar tags={tags} />

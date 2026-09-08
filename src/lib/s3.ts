@@ -25,6 +25,13 @@ export async function presignPhotoUpload(key: string, contentType: string) {
   return { uploadUrl, publicUrl };
 }
 
+/** Direct server-side upload (not presigned) — used when the server already has the bytes in hand. */
+export async function uploadBuffer(key: string, body: Buffer, contentType: string) {
+  const cfg = env.s3;
+  await getClient().send(new PutObjectCommand({ Bucket: cfg.bucket, Key: key, Body: body, ContentType: contentType }));
+  return `${cfg.publicUrl.replace(/\/$/, "")}/${key}`;
+}
+
 export async function deleteObject(key: string) {
   const cfg = env.s3;
   await getClient().send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }));

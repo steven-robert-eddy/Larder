@@ -2,14 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { deriveEffortTagNames } from "@/lib/taxonomy";
-import { parseRecipeFormData, type RecipeFormState } from "./form-schema";
+import { parseRecipeFormData, flattenZodErrors, type RecipeFormState } from "./form-schema";
 import type { RecipeFormValues } from "@/lib/validation";
 
-async function resolveTagCreateInputs(userId: string, values: RecipeFormValues) {
+export async function resolveTagCreateInputs(userId: string, values: RecipeFormValues) {
   const hasPrepOrCook = values.prepMinutes != null || values.cookMinutes != null;
   const totalMinutes =
     values.totalMinutes ?? (hasPrepOrCook ? (values.prepMinutes ?? 0) + (values.cookMinutes ?? 0) : undefined);
@@ -30,6 +29,38 @@ async function resolveTagCreateInputs(userId: string, values: RecipeFormValues) 
   return { totalMinutes, tagCreates };
 }
 
+/** Shared by createRecipeAction and the import review screen's confirm action. */
+export async function buildRecipeCreateInput(
+  userId: string,
+  values: RecipeFormValues,
+  extra?: { heroImageUrl?: string | null },
+) {
+  const { totalMinutes, tagCreates } = await resolveTagCreateInputs(userId, values);
+  return {
+    userId,
+    title: values.title,
+    description: values.description,
+    servingsYield: values.servingsYield,
+    servingsUnit: values.servingsUnit,
+    prepMinutes: values.prepMinutes,
+    cookMinutes: values.cookMinutes,
+    totalMinutes,
+    sourceType: values.sourceType,
+    sourceUrl: values.sourceUrl,
+    sourceName: values.sourceName,
+    sourceAuthor: values.sourceAuthor,
+    notes: values.notes,
+    heroImageUrl: extra?.heroImageUrl ?? undefined,
+    ingredients: {
+      create: values.ingredients.map((ing, i) => ({ ...ing, position: i })),
+    },
+    steps: {
+      create: values.steps.map((step, i) => ({ ...step, position: i })),
+    },
+    tags: { create: tagCreates },
+  };
+}
+
 export async function createRecipeAction(
   _prevState: RecipeFormState,
   formData: FormData,
@@ -40,32 +71,8 @@ export async function createRecipeAction(
     return { error: "Please fix the errors below.", fieldErrors: flattenZodErrors(parsed.error) };
   }
 
-  const values = parsed.data;
-  const { totalMinutes, tagCreates } = await resolveTagCreateInputs(user.id, values);
-
   const recipe = await prisma.recipe.create({
-    data: {
-      userId: user.id,
-      title: values.title,
-      description: values.description,
-      servingsYield: values.servingsYield,
-      servingsUnit: values.servingsUnit,
-      prepMinutes: values.prepMinutes,
-      cookMinutes: values.cookMinutes,
-      totalMinutes,
-      sourceType: values.sourceType,
-      sourceUrl: values.sourceUrl,
-      sourceName: values.sourceName,
-      sourceAuthor: values.sourceAuthor,
-      notes: values.notes,
-      ingredients: {
-        create: values.ingredients.map((ing, i) => ({ ...ing, position: i })),
-      },
-      steps: {
-        create: values.steps.map((step, i) => ({ ...step, position: i })),
-      },
-      tags: { create: tagCreates },
-    },
+    data: await buildRecipeCreateInput(user.id, parsed.data),
   });
 
   revalidatePath("/recipes");
@@ -204,13 +211,4 @@ export async function deletePhotoAction(recipeId: string, photoId: string) {
   if (!owns) return;
   await prisma.recipePhoto.deleteMany({ where: { id: photoId, recipeId } });
   revalidatePath(`/recipes/${recipeId}`);
-}
-
-function flattenZodErrors(error: z.ZodError) {
-  const out: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const key = issue.path.map(String).join(".") || "form";
-    if (!out[key]) out[key] = issue.message;
-  }
-  return out;
 }

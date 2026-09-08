@@ -1,6 +1,6 @@
 // Larder — Prisma schema
-// Phase 1 (Library foundation) entities only. ImportJob (Phase 2) and
-// MealPlanEntry (Phase 4) are deliberately not scaffolded yet — see
+// Phase 1 (Library foundation) + Phase 2 (Import) entities.
+// MealPlanEntry (Phase 4) is deliberately not scaffolded yet — see
 // design doc section 12: "Do not scaffold Phase 4 tables early."
 
 generator client {
@@ -40,6 +40,20 @@ enum AppliedBy {
   USER
 }
 
+enum ImportKind {
+  WEB
+  INSTAGRAM
+  PHOTO
+}
+
+enum ImportStatus {
+  QUEUED
+  RUNNING
+  NEEDS_REVIEW
+  DONE
+  FAILED
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -51,8 +65,9 @@ model User {
   passwordHash String   @map("password_hash")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  recipes  Recipe[]
-  tags     Tag[]
+  recipes    Recipe[]
+  tags       Tag[]
+  importJobs ImportJob[]
 
   @@map("users")
 }
@@ -90,7 +105,12 @@ model Recipe {
 
   // Generated column (see migrations/20260816150600_search_indexes) — a
   // stored tsvector over title/description/notes. `Unsupported` keeps
-  // Prisma Migrate from trying to manage or drop it as drift.
+  // Prisma Migrate from trying to manage the column's type, but NOT the
+  // indexes on it or its generated-column default: every future
+  // `prisma migrate dev` will try to DROP the hand-written trigram/tsvector
+  // indexes and this column's (nonexistent) default, because those aren't
+  // expressible in this schema file. Always generate with `--create-only`,
+  // strip those spurious statements by hand, then apply.
   searchVector Unsupported("tsvector")? @map("search_vector")
 
   ingredients IngredientLine[]
@@ -202,4 +222,30 @@ model CookLog {
 
   @@index([recipeId, cookedOn])
   @@map("cook_logs")
+}
+
+model ImportJob {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind   ImportKind   @map("kind")
+  status ImportStatus @default(QUEUED)
+
+  inputUrl       String?  @map("input_url")
+  inputAssetUrls String[] @map("input_asset_urls")
+
+  rawPayload    Json? @map("raw_payload")
+  parsedPayload Json? @map("parsed_payload")
+
+  errorMessage String? @map("error_message")
+
+  recipeId String? @map("recipe_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@map("import_jobs")
 }

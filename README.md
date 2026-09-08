@@ -1,11 +1,32 @@
 # Larder
 
 A personal, self-hosted recipe library and meal planner. See
-[`docs/design.md`](./docs/design.md) for the full design document — this
-build covers **Phase 1: Library foundation** (auth, data model, manual
-recipe entry/editing, browse/search/filter, tag management, photo upload).
-Import (Phase 2), capture (Phase 3), and meal planning (Phase 4) are not
-built yet, and their tables are deliberately not scaffolded early.
+[`docs/design.md`](./docs/design.md) for the full design document.
+
+Built so far:
+- **Phase 1: Library foundation** — auth, data model, manual recipe
+  entry/editing, browse/search/filter, tag management, photo upload.
+- **Phase 2 (partial): Import** — paste a URL, and if the page publishes
+  `schema.org/Recipe` structured data (most modern recipe sites do), it's
+  parsed into a review screen with nothing saved until you confirm. The
+  AI fallback (for pages without structured data), paste-a-blob import,
+  and auto-tagging are intentionally not built yet — see "Open scope" below.
+
+Capture (Phase 3) and meal planning (Phase 4) aren't built, and their
+tables are deliberately not scaffolded early.
+
+### Open scope within Phase 2
+
+Deferred on purpose, not forgotten:
+- **AI fallback extraction** (`ANTHROPIC_API_KEY` is wired into env/deploy
+  but unused) — for pages with no structured data, currently they land on
+  a blank review form instead.
+- **Paste-a-blob** manual import.
+- **Auto-tagging** beyond the deterministic EFFORT derivation (already
+  live since Phase 1).
+- **Job queue** (`pg-boss`, per the design doc) — the structured-data path
+  is fast enough to run synchronously; a queue becomes necessary once the
+  AI fallback and photo/OCR paths (Phase 3) are slow enough to need one.
 
 ## Stack
 
@@ -77,6 +98,7 @@ image so the VM never has to.
 | `npm run dev` | Start the dev server |
 | `npm run build` / `npm run start` | Production build / serve |
 | `npm run lint` | ESLint |
+| `npm run test` | Vitest — parser unit tests + fixtures (`src/lib/import/`) |
 | `npm run db:migrate` | `prisma migrate dev` (local schema changes) |
 | `npm run db:deploy` | `prisma migrate deploy` (apply migrations, no diffing) |
 | `npm run db:seed` | Run `prisma/seed.ts` |
@@ -97,9 +119,19 @@ image so the VM never has to.
 - **EFFORT tags are derived, not guessed.** `weeknight` / `project` are
   applied automatically from `total_minutes` in code
   (`src/lib/taxonomy.ts`), not by a model — see design doc section 6.
-- Phase 2's `ImportJob` table and Phase 4's `MealPlanEntry` table are not
-  yet in the schema, per the design doc's "don't scaffold future phases
-  early" guidance.
+- Phase 4's `MealPlanEntry` table is not yet in the schema, per the
+  design doc's "don't scaffold future phases early" guidance.
+- **`ImportJob`'s `recipe_id` is a plain column, not a Prisma relation** —
+  deliberately, so a recipe can be hard-deleted later without needing
+  cascade/set-null ceremony on a field that's just an audit trail.
+- **Migrations touching this schema need `--create-only`.** Prisma's
+  migration diffing doesn't know about the hand-written trigram indexes
+  or the generated `search_vector` column (see above) and will try to
+  drop them on every `prisma migrate dev` — generate with `--create-only`,
+  strip the spurious `DROP INDEX`/`ALTER COLUMN ... DROP DEFAULT`
+  statements by hand, then apply. See the comment on `searchVector` in
+  `schema.prisma` and `prisma/migrations/20260908183849_import_jobs/` for
+  a worked example.
 
 ## Environment variables
 
