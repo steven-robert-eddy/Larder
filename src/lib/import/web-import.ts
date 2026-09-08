@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { fetchPageHtml, extractSiteName, PageFetchError } from "./fetch-page";
-import { parseRecipeFromHtml } from "./json-ld";
+import { parseRecipeFromHtml, type WebExtractionResult } from "./json-ld";
 import { downloadAndStoreHeroImage } from "./hero-image";
+import { extractReadableText, extractOgImage } from "./readable-text";
+import { extractRecipeWithAI, AiExtractionError } from "./ai-extract";
+import { env } from "@/lib/env";
 
 // Cap how much raw HTML we keep for a failed-to-parse job — enough to
 // diagnose or hand-fix from, not the whole multi-megabyte page.
@@ -15,14 +18,20 @@ export type WebImportOutcome = { jobId: string; status: "NEEDS_REVIEW" | "FAILED
  * Shared by the two ways HTML gets obtained: fetched server-side
  * (runWebImport) or captured client-side by the bookmarklet
  * (runClippedImport) — see clip-token.ts for why the latter exists.
+ *
+ * Structured data (JSON-LD) is tried first — it's free and never
+ * hallucinates. Only pages with no structured data fall through to the AI
+ * extraction (design doc section 5.1) — and only when it's configured; if
+ * it isn't, or it fails, this still lands in NEEDS_REVIEW with the raw
+ * HTML kept rather than losing the attempt (design doc section 12).
  */
 async function processHtmlIntoImportJob(userId: string, jobId: string, url: string, html: string): Promise<void> {
-  const parsed = parseRecipeFromHtml(html);
   const siteName = extractSiteName(html, url);
+  const structured = parseRecipeFromHtml(html);
+
+  const parsed = structured ?? (await tryAiFallback(html));
 
   if (!parsed) {
-    // Never let extraction failure lose data (design doc section 12) — the
-    // raw HTML is kept so this can still be reviewed and filled in by hand.
     await prisma.importJob.update({
       where: { id: jobId },
       data: {
@@ -42,12 +51,31 @@ async function processHtmlIntoImportJob(userId: string, jobId: string, url: stri
     source_url: url,
     source_name: siteName,
     stored_hero_image_url: heroImageUrl,
+    extraction_method: structured ? "structured" : "ai",
   };
 
   await prisma.importJob.update({
     where: { id: jobId },
     data: { status: "NEEDS_REVIEW", parsedPayload: payload satisfies Prisma.InputJsonValue },
   });
+}
+
+/** Best-effort — a failure here just means the page falls through to a blank review form, not a failed import. */
+async function tryAiFallback(html: string): Promise<WebExtractionResult | null> {
+  if (!env.anthropicApiKey) return null;
+
+  try {
+    const text = extractReadableText(html);
+    const extracted = await extractRecipeWithAI(text);
+    return {
+      ...extracted,
+      hero_image_url: extracted.hero_image_url ?? extractOgImage(html),
+      source_author: null,
+    };
+  } catch (err) {
+    if (err instanceof AiExtractionError) return null;
+    throw err;
+  }
 }
 
 /**

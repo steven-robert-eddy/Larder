@@ -44,6 +44,7 @@ enum ImportKind {
   WEB
   INSTAGRAM
   PHOTO
+  PASTE
 }
 
 enum ImportStatus {

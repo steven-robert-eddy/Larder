@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { runWebImport } from "@/lib/import/web-import";
+import { runPasteImport } from "@/lib/import/paste-import";
 import { buildRecipeCreateInput } from "../recipes/actions";
 import { parseRecipeFormData, flattenZodErrors, type RecipeFormState } from "../recipes/form-schema";
 
@@ -25,6 +26,20 @@ export async function createWebImportAction(
     return { error: job?.errorMessage ?? "Could not import that page." };
   }
 
+  redirect(`/import/${outcome.jobId}/review`);
+}
+
+export type PasteImportFormState = { error: string | null };
+
+export async function createPasteImportAction(
+  _prevState: PasteImportFormState,
+  formData: FormData,
+): Promise<PasteImportFormState> {
+  const user = await requireUser();
+  const text = String(formData.get("text") ?? "").trim();
+  if (!text) return { error: "Paste some recipe text first." };
+
+  const outcome = await runPasteImport(user.id, text);
   redirect(`/import/${outcome.jobId}/review`);
 }
 

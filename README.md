@@ -6,32 +6,36 @@ A personal, self-hosted recipe library and meal planner. See
 Built so far:
 - **Phase 1: Library foundation** — auth, data model, manual recipe
   entry/editing, browse/search/filter, tag management, photo upload.
-- **Phase 2 (partial): Import** — paste a URL, and if the page publishes
+- **Phase 2: Import** — paste a URL, and if the page publishes
   `schema.org/Recipe` structured data (most modern recipe sites do), it's
-  parsed into a review screen with nothing saved until you confirm. Sites
-  that block that kind of request (Allrecipes and other big commercial
-  sites especially) have a fallback: a browser bookmarklet at
-  `/import/bookmarklet` that captures the page from inside your own
-  browser instead of fetching it server-side, so nothing about the
-  request looks automated. The AI fallback (for pages with neither
-  structured data nor a cooperative browser), paste-a-blob import, and
-  auto-tagging are intentionally not built yet — see "Open scope" below.
+  parsed into a review screen with nothing saved until you confirm. Pages
+  with no structured data fall back to AI extraction (Claude Sonnet 5)
+  instead of a blank form, when `ANTHROPIC_API_KEY` is configured. Sites
+  that block server-side fetches entirely (Allrecipes and other big
+  commercial sites especially) have their own fallback: a browser
+  bookmarklet at `/import/bookmarklet` that captures the page from inside
+  your own browser instead, so nothing about the request looks automated.
+  There's also `/import/paste` for anything that isn't a URL at all — an
+  Instagram caption, a notes-app entry — dump the text and AI splits it
+  into ingredients and steps the same way.
 
 Capture (Phase 3) and meal planning (Phase 4) aren't built, and their
-tables are deliberately not scaffolded early.
+tables are deliberately not scaffolded early. Dedicated Instagram/cookbook
+import UI (share-sheet integration, URL fetch attempt, vision extraction
+from photos) is Phase 3 per the design doc's phase order — `/import/paste`
+covers the same recipes-from-a-caption need today by hand, without
+scaffolding that phase's tables or share-sheet plumbing early.
 
 ### Open scope within Phase 2
 
 Deferred on purpose, not forgotten:
-- **AI fallback extraction** (`ANTHROPIC_API_KEY` is wired into env/deploy
-  but unused) — for pages with no structured data, currently they land on
-  a blank review form instead.
-- **Paste-a-blob** manual import.
 - **Auto-tagging** beyond the deterministic EFFORT derivation (already
-  live since Phase 1).
-- **Job queue** (`pg-boss`, per the design doc) — the structured-data path
-  is fast enough to run synchronously; a queue becomes necessary once the
-  AI fallback and photo/OCR paths (Phase 3) are slow enough to need one.
+  live since Phase 1) — `suggested_tags` comes back from AI extraction but
+  isn't applied automatically yet.
+- **Job queue** (`pg-boss`, per the design doc) — both the structured-data
+  and AI-extraction paths are fast enough to run synchronously; a queue
+  becomes necessary once the photo/OCR paths (Phase 3) are slow enough to
+  need one.
 
 ## Stack
 
@@ -144,10 +148,27 @@ image so the VM never has to.
   explicitly excluded from the auth middleware (`src/proxy.ts`) for this
   reason; don't add other unauthenticated routes there without the same
   care around CORS and token validation.
+- **AI extraction lives behind one interface**, `src/lib/import/ai-extract.ts`
+  (`extractRecipeWithAI`) — every caller (the web-import AI fallback,
+  paste-a-blob, and eventually Instagram/cookbook-photo in Phase 3) goes
+  through it rather than touching the Anthropic SDK directly, per design
+  doc section 12. It uses `client.messages.parse` with
+  `zodOutputFormat(extractionContractSchema)` on Claude Sonnet 5 — Sonnet
+  because this is a straightforward extraction task, not multi-step
+  reasoning, and it's cheap enough to run on every import that needs it.
+  Tests mock this module instead of calling the API — see
+  `ai-extract.test.ts`.
+- **AI extraction failures never lose data.** Web import falls through to
+  the existing blank-review-with-raw-HTML behavior; paste-a-blob keeps the
+  original pasted text on the job (`raw_payload.text`) and shows it on the
+  review screen in a collapsed `<details>` so nothing has to be retyped.
 
 ## Environment variables
 
 See `.env.example` for the full list (database, S3/object storage,
 Auth.js, seed user, base URL, the optional `CLIP_TOKEN` for the import
-bookmarklet). Nothing is hardcoded — a missing required variable fails
-fast via `src/lib/env.ts` rather than silently defaulting to `localhost`.
+bookmarklet, the optional `ANTHROPIC_API_KEY` for AI-assisted import).
+Nothing is hardcoded — a missing required variable fails fast via
+`src/lib/env.ts` rather than silently defaulting to `localhost`. Both
+`CLIP_TOKEN` and `ANTHROPIC_API_KEY` are optional: unset, their features
+just show a "not set up yet" message instead of failing the build.

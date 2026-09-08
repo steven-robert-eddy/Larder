@@ -19,13 +19,23 @@ export default async function ImportPage() {
 
       <p className="text-sm text-neutral-400">
         Works best on sites that publish structured recipe data (most modern recipe blogs and
-        publications do). If a page doesn&apos;t have any, you&apos;ll land on a blank review form
-        instead of losing the attempt — or you can always{" "}
+        publications do). If a page doesn&apos;t have any, AI does its best to pull out ingredients
+        and steps instead of leaving you with a blank form — or you can always{" "}
         <Link href="/recipes/new" className="underline">
           add it by hand
         </Link>
         .
       </p>
+
+      <div className="rounded-lg border border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          Got an Instagram caption, a note, or something with no URL at all?{" "}
+          <Link href="/import/paste" className="font-medium underline">
+            Paste it in
+          </Link>{" "}
+          instead.
+        </p>
+      </div>
 
       <div className="rounded-lg border border-neutral-200 px-4 py-3 dark:border-neutral-800">
         <p className="text-sm text-neutral-600 dark:text-neutral-400">

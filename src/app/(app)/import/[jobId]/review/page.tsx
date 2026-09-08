@@ -8,12 +8,20 @@ import { defaultRecipeFormValues, EMPTY_INGREDIENT, EMPTY_STEP, type RecipeFormI
 import { confirmImportAction } from "../../actions";
 import { DiscardButton } from "./discard-button";
 import type { WebExtractionResult } from "@/lib/import/json-ld";
+import type { StoredPastePayload } from "@/lib/import/paste-import";
 
 type StoredWebPayload = WebExtractionResult & {
   source_url: string;
   source_name: string;
   stored_hero_image_url: string | null;
+  extraction_method: "structured" | "ai";
 };
+
+type ReviewPayload = StoredWebPayload | StoredPastePayload;
+
+function isWebPayload(payload: ReviewPayload): payload is StoredWebPayload {
+  return "source_url" in payload;
+}
 
 export default async function ImportReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
@@ -39,19 +47,29 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
     );
   }
 
-  const payload = job.parsedPayload as StoredWebPayload | null;
+  const payload = job.parsedPayload as ReviewPayload | null;
+  const rawText = job.kind === "PASTE" ? (job.rawPayload as { text?: string } | null)?.text : null;
   const tags = await listTagsForUser(user.id);
-  const initialValues = toInitialValues(payload, job.inputUrl);
+  const initialValues = toInitialValues(payload, job.kind, job.inputUrl);
 
   return (
     <div>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Review import</h1>
-          {payload ? (
+          {payload && isWebPayload(payload) ? (
             <p className="mt-1 text-sm text-neutral-500">
               Pulled from <span className="font-medium">{payload.source_name}</span> — check everything
               below before saving.
+            </p>
+          ) : payload ? (
+            <p className="mt-1 text-sm text-neutral-500">
+              AI-assisted extraction from your pasted text — check everything below before saving.
+            </p>
+          ) : job.kind === "PASTE" ? (
+            <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+              Couldn&apos;t extract a recipe from that text. Your original paste is below — fill in
+              the form by hand, or discard and try again.
             </p>
           ) : (
             <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
@@ -59,11 +77,25 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
               in what you can below, or discard and try a different source.
             </p>
           )}
+          {payload && isWebPayload(payload) && payload.extraction_method === "ai" ? (
+            <p className="mt-1 text-xs text-neutral-400">
+              This page had no structured recipe data, so AI pulled these out instead — worth a closer look.
+            </p>
+          ) : null}
         </div>
         <DiscardButton jobId={jobId} />
       </div>
 
-      {payload?.stored_hero_image_url ? (
+      {rawText ? (
+        <details className="mb-6 rounded-lg border border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <summary className="cursor-pointer text-sm font-medium text-neutral-600 dark:text-neutral-400">
+            Your original paste
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm text-neutral-500">{rawText}</pre>
+        </details>
+      ) : null}
+
+      {payload && isWebPayload(payload) && payload.stored_hero_image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={payload.stored_hero_image_url}
@@ -82,14 +114,20 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
   );
 }
 
-function toInitialValues(payload: StoredWebPayload | null, inputUrl: string | null): RecipeFormInitialValues {
+function toInitialValues(
+  payload: ReviewPayload | null,
+  kind: string,
+  inputUrl: string | null,
+): RecipeFormInitialValues {
   if (!payload) {
     return {
       ...defaultRecipeFormValues(),
-      sourceType: "WEB",
+      sourceType: kind === "PASTE" ? "MANUAL" : "WEB",
       sourceUrl: inputUrl ?? "",
     };
   }
+
+  const web = isWebPayload(payload) ? payload : null;
 
   return {
     title: payload.title,
@@ -99,10 +137,10 @@ function toInitialValues(payload: StoredWebPayload | null, inputUrl: string | nu
     prepMinutes: payload.prep_minutes != null ? String(payload.prep_minutes) : "",
     cookMinutes: payload.cook_minutes != null ? String(payload.cook_minutes) : "",
     totalMinutes: payload.total_minutes != null ? String(payload.total_minutes) : "",
-    sourceType: "WEB",
-    sourceUrl: payload.source_url || inputUrl || "",
-    sourceName: payload.source_name ?? "",
-    sourceAuthor: payload.source_author ?? "",
+    sourceType: web ? "WEB" : "MANUAL",
+    sourceUrl: web ? web.source_url || inputUrl || "" : "",
+    sourceName: web?.source_name ?? "",
+    sourceAuthor: web?.source_author ?? "",
     notes: "",
     ingredients:
       payload.ingredients.length > 0
