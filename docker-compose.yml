@@ -61,6 +61,7 @@ services:
       BASE_URL: "${BASE_URL:-http://localhost:3000}"
       DATABASE_URL: "postgresql://${POSTGRES_USER:-larder}:${POSTGRES_PASSWORD:-larder}@postgres:5432/${POSTGRES_DB:-larder}?schema=public"
       AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env}"
+      AUTH_PASSPHRASE: "${AUTH_PASSPHRASE:-larder}"
       AUTH_URL: "${BASE_URL:-http://localhost:3000}"
       S3_ENDPOINT: http://minio:9000
       S3_REGION: "${S3_REGION:-auto}"

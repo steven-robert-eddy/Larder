@@ -16,6 +16,9 @@ export const env = {
   get authSecret() {
     return required("AUTH_SECRET");
   },
+  get authPassphrase() {
+    return required("AUTH_PASSPHRASE");
+  },
   get s3() {
     return {
       endpoint: required("S3_ENDPOINT"),

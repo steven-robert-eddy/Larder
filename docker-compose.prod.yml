@@ -53,6 +53,7 @@ services:
       AUTH_URL: "https://${DOMAIN:?Set DOMAIN in .env}"
       DATABASE_URL: "postgresql://${POSTGRES_USER:-larder}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-larder}?schema=public"
       AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env}"
+      AUTH_PASSPHRASE: "${AUTH_PASSPHRASE:?Set AUTH_PASSPHRASE in .env}"
       S3_ENDPOINT: "${S3_ENDPOINT:?Set S3_ENDPOINT in .env}"
       S3_REGION: auto
       S3_BUCKET: "${S3_BUCKET:?Set S3_BUCKET in .env}"
