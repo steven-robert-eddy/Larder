@@ -26,6 +26,17 @@ export default async function ImportPage() {
         </Link>
         .
       </p>
+
+      <div className="rounded-lg border border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          Getting blocked on a site like Allrecipes? Big commercial sites often refuse
+          requests that don&apos;t look like a real browser.{" "}
+          <Link href="/import/bookmarklet" className="font-medium underline">
+            Set up the clip bookmarklet
+          </Link>{" "}
+          to import from inside your own browser instead.
+        </p>
+      </div>
     </div>
   );
 }

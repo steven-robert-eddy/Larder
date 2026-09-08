@@ -66,6 +66,7 @@ services:
       SEED_USER_EMAIL: "${SEED_USER_EMAIL:-you@example.com}"
       SEED_USER_PASSWORD: "${SEED_USER_PASSWORD:-changeme123}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLIP_TOKEN: "${CLIP_TOKEN:-}"
 
   caddy:
     image: caddy:2-alpine

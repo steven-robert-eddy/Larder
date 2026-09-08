@@ -11,8 +11,12 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const isLoginPage = req.nextUrl.pathname.startsWith("/login");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
+  // The clip bookmarklet authenticates with its own bearer token (it runs
+  // on arbitrary third-party origins, so it can't carry our session
+  // cookie) — see src/app/api/import/clip/route.ts.
+  const isClipApi = req.nextUrl.pathname.startsWith("/api/import/clip");
 
-  if (isAuthApi) return NextResponse.next();
+  if (isAuthApi || isClipApi) return NextResponse.next();
 
   if (!isLoggedIn && !isLoginPage) {
     const loginUrl = new URL("/login", req.nextUrl);

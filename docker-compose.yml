@@ -71,6 +71,7 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       S3_PUBLIC_URL: "${S3_PUBLIC_URL:-http://localhost:9000/larder-photos}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLIP_TOKEN: "${CLIP_TOKEN:-}"
 
 volumes:
   postgres_data:

@@ -33,4 +33,8 @@ export const env = {
   get anthropicApiKey() {
     return process.env.ANTHROPIC_API_KEY || "";
   },
+  /** Bearer token for the bookmarklet clip endpoint. Optional — unset disables it. */
+  get clipToken() {
+    return process.env.CLIP_TOKEN || "";
+  },
 };
