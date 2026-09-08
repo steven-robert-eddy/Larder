@@ -31,22 +31,25 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs
 
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/tsconfig.json ./tsconfig.json
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 # prisma/seed.ts runs via tsx directly (not through the Next.js bundle),
 # so its relative imports (../src/lib/taxonomy, ../src/generated/prisma)
 # need the real source files here, not just the compiled server output.
-COPY --from=builder /app/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
 # The full node_modules (not just standalone's traced subset) so
 # `prisma migrate deploy` / `prisma db seed`, run directly rather than
 # through the Next.js bundle, can resolve their own dependency trees
 # (e.g. tsx's esbuild dependency) without hand-picking packages.
-COPY --from=builder /app/node_modules ./node_modules
+# --chown matters here specifically: Prisma writes into
+# node_modules/@prisma/engines at runtime (engine checksum/path caching),
+# which fails under the non-root `nextjs` user otherwise.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
