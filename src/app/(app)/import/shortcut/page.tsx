@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { env } from "@/lib/env";
 import { SelectableTextarea } from "../bookmarklet/selectable-textarea";
@@ -87,25 +88,24 @@ export default async function ShortcutPage() {
 
           <section className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-5 dark:border-neutral-800">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-              3. Open the result
+              3. Confirm it ran
             </h2>
             <ol className="list-decimal space-y-2 pl-5 text-sm text-neutral-600 dark:text-neutral-400">
               <li>
-                Add a <span className="font-medium">Get Dictionary Value</span> action, set the
-                key to <span className="font-medium">reviewUrl</span>, and make sure its input is
-                the result of the previous action (Shortcuts usually wires this up automatically).
-              </li>
-              <li>
-                Add a <span className="font-medium">Text</span> action, and combine{" "}
-                <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">{env.baseUrl}</code>{" "}
-                with the dictionary value from the step above (base URL first, then the value —
-                no space between them).
-              </li>
-              <li>
-                Add an <span className="font-medium">Open URLs</span> action using that combined
-                text. Done — save the shortcut.
+                Add a <span className="font-medium">Show Notification</span> action (or{" "}
+                <span className="font-medium">Show Alert</span>) with the text{" "}
+                <span className="font-medium">Saved to Larder</span>. Done — save the shortcut.
               </li>
             </ol>
+            <p className="text-xs text-neutral-400">
+              That&apos;s it — no need to parse the response or open a URL. The import already
+              happened server-side by the time this runs; this step is just a confirmation so you
+              know it fired. Check{" "}
+              <Link href="/import" className="underline">
+                Larder&apos;s import page
+              </Link>{" "}
+              afterward — anything waiting for review shows up right at the top.
+            </p>
           </section>
 
           <section className="flex flex-col gap-2">
@@ -128,10 +128,14 @@ export default async function ShortcutPage() {
               To use it: open a Reel or post in Instagram, tap Share, scroll the app row and tap{" "}
               <span className="font-medium">Clip to Larder</span> (tap{" "}
               <span className="font-medium">More</span> first if it&apos;s not visible — you can
-              pin it from there). Instagram&apos;s share sheet often only hands over the post
-              link, not the caption — if that happens you&apos;ll land on a review screen with a
-              &quot;paste the caption&quot; box instead of a filled-in recipe. That&apos;s
-              expected, not a bug; paste the caption in and it&apos;ll extract from that instead.
+              pin it from there), then open Larder&apos;s import page to review what came through.
+              Instagram&apos;s share sheet often only hands over the post link, not the caption —
+              if that happens you&apos;ll land on a review screen with a &quot;paste the
+              caption&quot; box instead of a filled-in recipe. That&apos;s expected, not a bug;
+              paste the caption in and it&apos;ll extract from that instead. If nothing shows up
+              on the import page at all after a share, that means the request itself failed
+              (wrong token, wrong URL, etc.) — worth double-checking the values below against
+              what you entered.
             </p>
           </section>
         </>

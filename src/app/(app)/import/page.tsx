@@ -1,9 +1,32 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
+import { prisma } from "@/lib/prisma";
 import { ImportUrlForm } from "./import-url-form";
 
+const KIND_LABEL: Record<string, string> = {
+  WEB: "Web import",
+  PASTE: "Pasted text",
+  PHOTO: "Screenshots",
+  INSTAGRAM: "Instagram",
+};
+
+function timeAgo(date: Date): string {
+  const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
 export default async function ImportPage() {
-  await requireUser();
+  const user = await requireUser();
+
+  const pending = await prisma.importJob.findMany({
+    where: { userId: user.id, status: "NEEDS_REVIEW" },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -14,6 +37,32 @@ export default async function ImportPage() {
           you&apos;ll always get a chance to review before it&apos;s saved.
         </p>
       </div>
+
+      {pending.length > 0 ? (
+        <section className="flex flex-col gap-2 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            Waiting for review
+          </h2>
+          <ul className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-900">
+            {pending.map((job) => {
+              const title = (job.parsedPayload as { title?: string } | null)?.title;
+              return (
+                <li key={job.id}>
+                  <Link
+                    href={`/import/${job.id}/review`}
+                    className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                  >
+                    <span className="truncate">
+                      {title ?? `${KIND_LABEL[job.kind] ?? job.kind} (needs review)`}
+                    </span>
+                    <span className="shrink-0 text-xs text-neutral-400">{timeAgo(job.createdAt)}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <ImportUrlForm />
 
