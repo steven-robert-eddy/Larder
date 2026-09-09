@@ -7,12 +7,17 @@ Personal recipe library + meal planner. Full design doc: `docs/design.md`
 **Phase 1 (Library foundation)** and **Phase 2 (Import)** in full — URL
 import (structured JSON-LD, then AI fallback), the clip bookmarklet for
 sites that block server-side fetches, paste-a-blob (also the practical
-path for Instagram captions today), and a Web Share Target
-(`/import/share-target`, Android/Chrome only) that feeds the OS share
-sheet into the same paste pipeline. The share target was pulled forward
-from Phase 3 at the user's explicit request — it's an entry point onto
-already-built extraction, not new capability, so it didn't need Phase 3's
-tables. Auto-tagging beyond EFFORT derivation and the job queue are still
+path for Instagram captions today), a Web Share Target
+(`/import/share-target`, Android/Chrome), and its iOS equivalent — a
+user-built Shortcut (`/import/shortcut`) hitting `/api/import/share`,
+since Safari has no share-target API of its own. All three (share
+target, iOS Shortcut, paste form) funnel into the same
+`runShareTargetImport`/`runPasteImport` functions in
+`src/lib/import/paste-import.ts` — one extraction path, three entry
+points. These were pulled forward from Phase 3 at the user's explicit
+request — they're entry points onto already-built extraction, not new
+capability, so none of it needed Phase 3's tables. Auto-tagging beyond
+EFFORT derivation and the job queue are still
 open (see README's "Open scope within Phase 2"). The rest of Phase 3
 (dedicated Instagram URL fetch, cookbook-photo capture, vision
 extraction) is not started. Follow the phase order in design doc section

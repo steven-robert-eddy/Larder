@@ -62,15 +62,26 @@ export async function runPasteImport(
   return { jobId: job.id, status: "NEEDS_REVIEW" };
 }
 
+/** A share payload with nothing but a bare link isn't recipe text — matches "https://..." with no other content. */
+function isBareUrl(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value.trim());
+}
+
 /**
- * Entry point for the OS share sheet (Web Share Target — Android/Chrome
- * only, see manifest.json's share_target). Sharing an Instagram post
- * commonly sends only the post's link, not the caption — the caption
- * isn't reliably exposed to the share sheet — so this can't assume any
- * text arrived. When it didn't, skip the AI call (nothing to extract)
- * and land straight on a blank review with the link preserved, same
- * shape as any other no-data-found import. The review screen then offers
- * a "paste the caption" box (retryPasteImport, below) rather than a dead
+ * Entry point for the OS/automation share surfaces — the Web Share
+ * Target (Android/Chrome, manifest.json's share_target) and the iOS
+ * Shortcuts share action (see /api/import/share), which can't always
+ * distinguish "shared a URL" from "shared text" as cleanly as the Web
+ * Share Target spec does, so this treats a text/title field that's
+ * nothing but a bare link the same as no text at all.
+ *
+ * Sharing an Instagram post commonly hands over only the post's link,
+ * not the caption — the caption isn't reliably exposed to either share
+ * surface — so this can't assume any real text arrived. When it didn't,
+ * skip the AI call (nothing to extract, and no point spending on it) and
+ * land straight on a blank review with the link preserved, same shape as
+ * any other no-data-found import. The review screen then offers a
+ * "paste the caption" box (retryPasteImport, below) rather than a dead
  * end.
  */
 export async function runShareTargetImport(
@@ -78,9 +89,10 @@ export async function runShareTargetImport(
   shared: { title?: string; text?: string; url?: string },
 ): Promise<PasteImportOutcome> {
   const blob = [shared.title, shared.text]
-    .filter((value): value is string => Boolean(value && value.trim()))
+    .filter((value): value is string => !!value && !!value.trim() && !isBareUrl(value))
     .join("\n\n");
-  const sourceUrl = shared.url?.trim() || null;
+  const sourceUrl =
+    shared.url?.trim() || [shared.title, shared.text].find((v): v is string => Boolean(v && isBareUrl(v))) || null;
 
   if (!blob) {
     const job = await prisma.importJob.create({

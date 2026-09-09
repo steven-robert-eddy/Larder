@@ -20,9 +20,10 @@ Built so far:
   into ingredients and steps the same way. On Android/Chrome, Larder also
   registers as a Web Share Target, so it shows up directly in the OS
   share sheet and feeds shared text straight into the same paste pipeline
-  (`/import/share-target` — see "Notes on the data model" below; iOS
-  Safari doesn't implement that API, so paste stays the only way in on
-  iPhone).
+  (`/import/share-target`). iOS Safari doesn't implement that API, but
+  `/import/shortcut` walks through building the iPhone equivalent as a
+  one-time Shortcut (see "Notes on the data model" below for how both
+  wire into the same backend).
 
 Capture (Phase 3) and meal planning (Phase 4) aren't built, and their
 tables are deliberately not scaffolded early. Dedicated Instagram/cookbook
@@ -182,6 +183,18 @@ image so the VM never has to.
   caption" box (`retryPasteImport`) that re-extracts into the *same* job
   instead of sending the user back to `/import/paste` to start over and
   lose the saved link.
+- **iOS has no Web Share Target API — the Shortcuts app is the
+  equivalent.** `/api/import/share` (bearer-token auth, same `CLIP_TOKEN`
+  as the clip bookmarklet) is the iPhone counterpart to
+  `/import/share-target`: a user-built Shortcut (walked through at
+  `/import/shortcut`, no developer account or Xcode needed) POSTs the
+  share-sheet payload there and opens the returned `reviewUrl`. Both
+  entry points funnel into the same `runShareTargetImport`, which now
+  treats a text/title field that's nothing but a bare link
+  (`isBareUrl`) the same as no text at all — Shortcuts can't always
+  distinguish "shared a URL" from "shared text" as cleanly as the Web
+  Share Target spec does, so this keeps a same-value-in-both-fields
+  Shortcut from wasting an AI call on a lone link.
 
 ## Environment variables
 

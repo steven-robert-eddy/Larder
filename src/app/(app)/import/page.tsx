@@ -33,9 +33,12 @@ export default async function ImportPage() {
           <Link href="/import/paste" className="font-medium underline">
             Paste it in
           </Link>{" "}
-          instead. On Android, if Larder is installed as an app, it also shows up right in the
-          share sheet — tap Share from Instagram (or anywhere) and pick Larder. iPhone doesn&apos;t
-          support that yet (Safari has no share-target API), so paste is still the way in there.
+          instead. You can also share straight from Instagram&apos;s share sheet — on Android it
+          works automatically once Larder is installed as an app; on iPhone it takes a{" "}
+          <Link href="/import/shortcut" className="font-medium underline">
+            one-time Shortcuts setup
+          </Link>
+          , since Safari has no share-target API of its own.
         </p>
       </div>
 

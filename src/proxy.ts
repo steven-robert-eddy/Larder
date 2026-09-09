@@ -11,12 +11,15 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const isLoginPage = req.nextUrl.pathname.startsWith("/login");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
-  // The clip bookmarklet authenticates with its own bearer token (it runs
-  // on arbitrary third-party origins, so it can't carry our session
-  // cookie) — see src/app/api/import/clip/route.ts.
-  const isClipApi = req.nextUrl.pathname.startsWith("/api/import/clip");
+  // The clip bookmarklet and the iOS Shortcuts share action both
+  // authenticate with the same bearer token instead of a session cookie
+  // — neither runs in a context that can carry ours (a third-party
+  // origin for the bookmarklet, a native automation for Shortcuts). See
+  // src/app/api/import/clip/route.ts and src/app/api/import/share/route.ts.
+  const isTokenApi =
+    req.nextUrl.pathname.startsWith("/api/import/clip") || req.nextUrl.pathname.startsWith("/api/import/share");
 
-  if (isAuthApi || isClipApi) return NextResponse.next();
+  if (isAuthApi || isTokenApi) return NextResponse.next();
 
   if (!isLoggedIn && !isLoginPage) {
     const loginUrl = new URL("/login", req.nextUrl);
