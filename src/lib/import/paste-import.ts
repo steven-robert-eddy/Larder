@@ -24,6 +24,7 @@ async function extractIntoJob(jobId: string, text: string): Promise<void> {
     });
   } catch (err) {
     if (!(err instanceof AiExtractionError)) throw err;
+    console.error(`Text extraction failed for import job ${jobId}:`, err.message);
     // Never let extraction failure lose data (design doc section 12) — the
     // pasted text is kept so this can still be reviewed and filled in by
     // hand instead of the attempt just disappearing.

@@ -31,6 +31,7 @@ export async function runPhotoImport(userId: string, images: ScreenshotImage[]):
     });
   } catch (err) {
     if (!(err instanceof AiExtractionError)) throw err;
+    console.error(`Photo extraction failed for import job ${job.id}:`, err.message);
     await prisma.importJob.update({
       where: { id: job.id },
       data: { status: "NEEDS_REVIEW", errorMessage: err.message },

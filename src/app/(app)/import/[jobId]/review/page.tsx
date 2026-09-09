@@ -99,6 +99,9 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
               This page had no structured recipe data, so AI pulled these out instead — worth a closer look.
             </p>
           ) : null}
+          {!payload && job.kind === "PHOTO" && job.errorMessage ? (
+            <p className="mt-1 text-xs text-neutral-400">Details: {job.errorMessage}</p>
+          ) : null}
         </div>
         <DiscardButton jobId={jobId} />
       </div>
