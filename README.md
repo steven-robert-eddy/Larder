@@ -17,14 +17,19 @@ Built so far:
   your own browser instead, so nothing about the request looks automated.
   There's also `/import/paste` for anything that isn't a URL at all — an
   Instagram caption, a notes-app entry — dump the text and AI splits it
-  into ingredients and steps the same way.
+  into ingredients and steps the same way. On Android/Chrome, Larder also
+  registers as a Web Share Target, so it shows up directly in the OS
+  share sheet and feeds shared text straight into the same paste pipeline
+  (`/import/share-target` — see "Notes on the data model" below; iOS
+  Safari doesn't implement that API, so paste stays the only way in on
+  iPhone).
 
 Capture (Phase 3) and meal planning (Phase 4) aren't built, and their
 tables are deliberately not scaffolded early. Dedicated Instagram/cookbook
-import UI (share-sheet integration, URL fetch attempt, vision extraction
-from photos) is Phase 3 per the design doc's phase order — `/import/paste`
-covers the same recipes-from-a-caption need today by hand, without
-scaffolding that phase's tables or share-sheet plumbing early.
+import UI (URL fetch attempt, vision extraction from photos) is Phase 3
+per the design doc's phase order — `/import/paste` plus the share target
+cover the same recipes-from-a-caption need today by hand, without
+scaffolding that phase's tables or vision/photo-capture work early.
 
 ### Open scope within Phase 2
 
@@ -162,6 +167,17 @@ image so the VM never has to.
   the existing blank-review-with-raw-HTML behavior; paste-a-blob keeps the
   original pasted text on the job (`raw_payload.text`) and shows it on the
   review screen in a collapsed `<details>` so nothing has to be retyped.
+- **Web Share Target is a thin entry point, not a new import path.**
+  `/import/share-target` (registered in `public/manifest.json`) just
+  parses the OS share payload and calls the same `runPasteImport` /
+  `runShareTargetImport` functions paste-a-blob uses — no new extraction
+  logic. Sharing an Instagram post commonly hands over only the post's
+  link, not the caption (captions aren't reliably exposed to the share
+  sheet), so a link-only share skips the AI call and lands on a blank
+  review with the link preserved rather than wasting a call on nothing.
+  `ImportJob.inputUrl` is now populated for `PASTE`-kind jobs too when a
+  source URL is available, and the review screen infers `sourceType:
+  "INSTAGRAM"` from an `instagram.com` link automatically.
 
 ## Environment variables
 

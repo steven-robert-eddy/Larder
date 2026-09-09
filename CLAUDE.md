@@ -6,13 +6,20 @@ Personal recipe library + meal planner. Full design doc: `docs/design.md`
 — read it before making structural changes. Currently implemented:
 **Phase 1 (Library foundation)** and **Phase 2 (Import)** in full — URL
 import (structured JSON-LD, then AI fallback), the clip bookmarklet for
-sites that block server-side fetches, and paste-a-blob (also the
-practical path for Instagram captions today). Auto-tagging beyond EFFORT
-derivation and the job queue are still open (see README's "Open scope
-within Phase 2"). Phase 3 (dedicated Instagram/cookbook-photo capture,
-vision extraction, Web Share Target) is not started. Follow the phase
-order in design doc section 11; don't scaffold a later phase's tables or
-features "since we're in there."
+sites that block server-side fetches, paste-a-blob (also the practical
+path for Instagram captions today), and a Web Share Target
+(`/import/share-target`, Android/Chrome only) that feeds the OS share
+sheet into the same paste pipeline. The share target was pulled forward
+from Phase 3 at the user's explicit request — it's an entry point onto
+already-built extraction, not new capability, so it didn't need Phase 3's
+tables. Auto-tagging beyond EFFORT derivation and the job queue are still
+open (see README's "Open scope within Phase 2"). The rest of Phase 3
+(dedicated Instagram URL fetch, cookbook-photo capture, vision
+extraction) is not started. Follow the phase order in design doc section
+11; don't scaffold a later phase's tables or features "since we're in
+there" — pulling forward a self-contained piece like the share target,
+at explicit user request, is a narrow exception, not a precedent for
+skipping ahead unprompted.
 
 Key conventions from the design doc (section 12) that apply to all future
 phases:

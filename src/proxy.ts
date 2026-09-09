@@ -20,7 +20,11 @@ export default auth((req) => {
 
   if (!isLoggedIn && !isLoginPage) {
     const loginUrl = new URL("/login", req.nextUrl);
-    loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+    // Preserve the full path + query, not just the pathname — the share
+    // target route (src/app/(app)/import/share-target) carries the
+    // shared text/url as query params, and those would otherwise be
+    // silently dropped if the user shares into the app while logged out.
+    loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 

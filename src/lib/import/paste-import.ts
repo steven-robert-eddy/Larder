@@ -13,10 +13,18 @@ export type StoredPastePayload = Awaited<ReturnType<typeof extractRecipeWithAI>>
  * path for the existing notes doc, and for anything the other import
  * paths fumble. No fetch, no HTML — the pasted text goes straight to the
  * same AI extraction interface the web import fallback uses.
+ *
+ * sourceUrl is optional and stored as-is (design doc section 5.2: "always
+ * store source_url so the original post can be reopened") — the share
+ * target handler below passes it through when the OS share included one.
  */
-export async function runPasteImport(userId: string, text: string): Promise<PasteImportOutcome> {
+export async function runPasteImport(
+  userId: string,
+  text: string,
+  sourceUrl?: string | null,
+): Promise<PasteImportOutcome> {
   const job = await prisma.importJob.create({
-    data: { userId, kind: "PASTE", status: "RUNNING" },
+    data: { userId, kind: "PASTE", status: "RUNNING", inputUrl: sourceUrl ?? null },
   });
 
   try {
@@ -42,4 +50,32 @@ export async function runPasteImport(userId: string, text: string): Promise<Past
   }
 
   return { jobId: job.id, status: "NEEDS_REVIEW" };
+}
+
+/**
+ * Entry point for the OS share sheet (Web Share Target — Android/Chrome
+ * only, see manifest.json's share_target). Sharing an Instagram post
+ * commonly sends only the post's link, not the caption — the caption
+ * isn't reliably exposed to the share sheet — so this can't assume any
+ * text arrived. When it didn't, skip the AI call (nothing to extract)
+ * and land straight on a blank review with the link preserved, same
+ * shape as any other no-data-found import.
+ */
+export async function runShareTargetImport(
+  userId: string,
+  shared: { title?: string; text?: string; url?: string },
+): Promise<PasteImportOutcome> {
+  const blob = [shared.title, shared.text]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join("\n\n");
+  const sourceUrl = shared.url?.trim() || null;
+
+  if (!blob) {
+    const job = await prisma.importJob.create({
+      data: { userId, kind: "PASTE", status: "NEEDS_REVIEW", inputUrl: sourceUrl },
+    });
+    return { jobId: job.id, status: "NEEDS_REVIEW" };
+  }
+
+  return runPasteImport(userId, blob, sourceUrl);
 }

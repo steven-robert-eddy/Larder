@@ -66,10 +66,16 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
             <p className="mt-1 text-sm text-neutral-500">
               AI-assisted extraction from your pasted text — check everything below before saving.
             </p>
-          ) : job.kind === "PASTE" ? (
+          ) : job.kind === "PASTE" && rawText ? (
             <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
               Couldn&apos;t extract a recipe from that text. Your original paste is below — fill in
               the form by hand, or discard and try again.
+            </p>
+          ) : job.kind === "PASTE" ? (
+            <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+              That share only included a link, not the caption text — Instagram usually doesn&apos;t
+              expose captions to the share sheet. The link is saved below; paste the caption in by
+              hand, or fill in the form yourself.
             </p>
           ) : (
             <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
@@ -114,6 +120,16 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
   );
 }
 
+/** Instagram links can arrive via the share target or a pasted caption — attribute them correctly either way (design doc section 5.2: always keep source_url so the original post can be reopened). */
+function pasteSourceType(url: string | null): "INSTAGRAM" | "MANUAL" {
+  if (!url) return "MANUAL";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") === "instagram.com" ? "INSTAGRAM" : "MANUAL";
+  } catch {
+    return "MANUAL";
+  }
+}
+
 function toInitialValues(
   payload: ReviewPayload | null,
   kind: string,
@@ -122,7 +138,7 @@ function toInitialValues(
   if (!payload) {
     return {
       ...defaultRecipeFormValues(),
-      sourceType: kind === "PASTE" ? "MANUAL" : "WEB",
+      sourceType: kind === "PASTE" ? pasteSourceType(inputUrl) : "WEB",
       sourceUrl: inputUrl ?? "",
     };
   }
@@ -137,8 +153,8 @@ function toInitialValues(
     prepMinutes: payload.prep_minutes != null ? String(payload.prep_minutes) : "",
     cookMinutes: payload.cook_minutes != null ? String(payload.cook_minutes) : "",
     totalMinutes: payload.total_minutes != null ? String(payload.total_minutes) : "",
-    sourceType: web ? "WEB" : "MANUAL",
-    sourceUrl: web ? web.source_url || inputUrl || "" : "",
+    sourceType: web ? "WEB" : pasteSourceType(inputUrl),
+    sourceUrl: web ? web.source_url || inputUrl || "" : inputUrl ?? "",
     sourceName: web?.source_name ?? "",
     sourceAuthor: web?.source_author ?? "",
     notes: "",
