@@ -197,13 +197,30 @@ image so the VM never has to.
   as the clip bookmarklet) is the iPhone counterpart to
   `/import/share-target`: a user-built Shortcut (walked through at
   `/import/shortcut`, no developer account or Xcode needed) POSTs the
-  share-sheet payload there and opens the returned `reviewUrl`. Both
-  entry points funnel into the same `runShareTargetImport`, which now
-  treats a text/title field that's nothing but a bare link
-  (`isBareUrl`) the same as no text at all — Shortcuts can't always
-  distinguish "shared a URL" from "shared text" as cleanly as the Web
-  Share Target spec does, so this keeps a same-value-in-both-fields
-  Shortcut from wasting an AI call on a lone link.
+  share-sheet payload there, then just shows a static confirmation — it
+  doesn't parse the response or navigate anywhere. `/import` shows a
+  "Waiting for review" list instead, since there's no page navigation to
+  land the user on. `resolveSharedPayload` in
+  `src/lib/import/paste-import.ts` (shared by both entry points) treats a
+  text/title field that's nothing but a bare link (`isBareUrl`) the same
+  as no text at all — Shortcuts can't always distinguish "shared a URL"
+  from "shared text" as cleanly as the Web Share Target spec does, so
+  this keeps a same-value-in-both-fields Shortcut from wasting an AI call
+  on a lone link.
+- **`/api/import/share` does not wait for AI extraction — `/import/share-target`
+  (Android) does.** A Share Sheet action on iOS runs under a tight
+  execution budget; awaiting a live Claude API call before responding
+  was observed killing the connection mid-request on a slow VM (client:
+  "network connection was lost"; server: "the destination stream closed
+  early"). `queueShareTargetImport` creates the `ImportJob` synchronously
+  and returns immediately, firing extraction in the background
+  (`extractIntoJob(...).catch(...)`, since an un-awaited rejection would
+  otherwise vanish and — worse — leave the job stuck in `RUNNING` forever
+  instead of landing somewhere reviewable per design doc section 12).
+  Android's page-navigation flow has no such time limit, so
+  `runShareTargetImport` still awaits the full extraction and redirects
+  straight to a filled-in review screen — don't merge these two paths,
+  they have genuinely different timing constraints.
 - **`/import/photo` reads text out of images with Claude's vision, not a
   separate OCR step.** `extractRecipeFromImages` (`src/lib/import/ai-extract.ts`)
   sends up to `MAX_PHOTOS` (6, see `actions.ts`) images as ordered image

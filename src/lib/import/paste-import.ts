@@ -67,16 +67,33 @@ function isBareUrl(value: string): boolean {
   return /^https?:\/\/\S+$/i.test(value.trim());
 }
 
+type SharedPayload = { title?: string; text?: string; url?: string };
+
 /**
- * Entry point for the OS/automation share surfaces — the Web Share
- * Target (Android/Chrome, manifest.json's share_target) and the iOS
- * Shortcuts share action (see /api/import/share), which can't always
- * distinguish "shared a URL" from "shared text" as cleanly as the Web
- * Share Target spec does, so this treats a text/title field that's
- * nothing but a bare link the same as no text at all.
+ * Sorts an OS/automation share payload into real caption text vs. a bare
+ * link, since the Web Share Target (Android/Chrome, manifest.json's
+ * share_target) and the iOS Shortcuts share action (/api/import/share)
+ * can't always distinguish "shared a URL" from "shared text" as cleanly
+ * as the Web Share Target spec does — a text/title field that's nothing
+ * but a bare link is treated the same as no text at all.
+ */
+function resolveSharedPayload(shared: SharedPayload): { blob: string; sourceUrl: string | null } {
+  const blob = [shared.title, shared.text]
+    .filter((value): value is string => !!value && !!value.trim() && !isBareUrl(value))
+    .join("\n\n");
+  const sourceUrl =
+    shared.url?.trim() || [shared.title, shared.text].find((v): v is string => Boolean(v && isBareUrl(v))) || null;
+  return { blob, sourceUrl };
+}
+
+/**
+ * Entry point for the Android Web Share Target (/import/share-target) —
+ * a full page navigation with no execution-time limit, so it's fine to
+ * await the whole extraction before returning: the page redirects
+ * straight to a filled-in review screen once this resolves.
  *
  * Sharing an Instagram post commonly hands over only the post's link,
- * not the caption — the caption isn't reliably exposed to either share
+ * not the caption — the caption isn't reliably exposed to the share
  * surface — so this can't assume any real text arrived. When it didn't,
  * skip the AI call (nothing to extract, and no point spending on it) and
  * land straight on a blank review with the link preserved, same shape as
@@ -84,15 +101,8 @@ function isBareUrl(value: string): boolean {
  * "paste the caption" box (retryPasteImport, below) rather than a dead
  * end.
  */
-export async function runShareTargetImport(
-  userId: string,
-  shared: { title?: string; text?: string; url?: string },
-): Promise<PasteImportOutcome> {
-  const blob = [shared.title, shared.text]
-    .filter((value): value is string => !!value && !!value.trim() && !isBareUrl(value))
-    .join("\n\n");
-  const sourceUrl =
-    shared.url?.trim() || [shared.title, shared.text].find((v): v is string => Boolean(v && isBareUrl(v))) || null;
+export async function runShareTargetImport(userId: string, shared: SharedPayload): Promise<PasteImportOutcome> {
+  const { blob, sourceUrl } = resolveSharedPayload(shared);
 
   if (!blob) {
     const job = await prisma.importJob.create({
@@ -102,6 +112,46 @@ export async function runShareTargetImport(
   }
 
   return runPasteImport(userId, blob, sourceUrl);
+}
+
+/**
+ * Same as runShareTargetImport, but for /api/import/share (the iOS
+ * Shortcuts action) — which does NOT get to take its time. A Share
+ * Sheet action runs under a tight iOS execution budget, and waiting for
+ * a live Claude API call before responding was observed killing the
+ * connection mid-request (client: "network connection was lost";
+ * server: "the destination stream closed early") on top of an
+ * already-slow VM. The Shortcut no longer reads the response body
+ * anyway (see /import/shortcut — it just shows a static confirmation),
+ * so there's nothing gained by waiting: create the job and return
+ * immediately, let extraction finish in the background, and rely on
+ * /import's pending-review list to surface the result once it's done.
+ */
+export async function queueShareTargetImport(userId: string, shared: SharedPayload): Promise<PasteImportOutcome> {
+  const { blob, sourceUrl } = resolveSharedPayload(shared);
+
+  const job = await prisma.importJob.create({
+    data: { userId, kind: "PASTE", status: blob ? "RUNNING" : "NEEDS_REVIEW", inputUrl: sourceUrl },
+  });
+
+  if (blob) {
+    extractIntoJob(job.id, blob).catch(async (err) => {
+      // extractIntoJob already handles AiExtractionError internally: this
+      // only fires for something unexpected (e.g. a DB error). Without an
+      // awaited caller, an uncaught rejection here would otherwise just
+      // vanish — and per design doc section 12, a failure must never
+      // leave the job stuck instead of landing somewhere reviewable.
+      console.error(`Background extraction failed for import job ${job.id}:`, err);
+      await prisma.importJob
+        .update({
+          where: { id: job.id },
+          data: { status: "NEEDS_REVIEW", errorMessage: "Extraction failed unexpectedly." },
+        })
+        .catch(() => {});
+    });
+  }
+
+  return { jobId: job.id, status: "NEEDS_REVIEW" };
 }
 
 /**

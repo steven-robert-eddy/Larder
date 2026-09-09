@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
-import { runShareTargetImport } from "@/lib/import/paste-import";
+import { queueShareTargetImport } from "@/lib/import/paste-import";
 
 // iOS has no Web Share Target API (Safari doesn't implement it — see
 // /import/share-target, which is Android/Chrome only), so this is the
@@ -65,7 +65,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No user found." }, { status: 500, headers: CORS_HEADERS });
   }
 
-  const outcome = await runShareTargetImport(user.id, shared);
+  // Deliberately does NOT await the AI extraction — see
+  // queueShareTargetImport's doc comment. iOS Share Sheet actions run
+  // under a tight execution budget and were observed killing the
+  // connection mid-request when this waited on a live Claude API call
+  // (client: "network connection was lost"; server: "the destination
+  // stream closed early"). The job is created synchronously (fast) and
+  // extraction continues after this responds.
+  const outcome = await queueShareTargetImport(user.id, shared);
   return NextResponse.json(
     { reviewUrl: `/import/${outcome.jobId}/review` },
     { headers: CORS_HEADERS },
