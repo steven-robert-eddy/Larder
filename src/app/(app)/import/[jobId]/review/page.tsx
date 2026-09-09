@@ -10,6 +10,7 @@ import { DiscardButton } from "./discard-button";
 import { RetryPasteForm } from "./retry-paste-form";
 import type { WebExtractionResult } from "@/lib/import/json-ld";
 import type { StoredPastePayload } from "@/lib/import/paste-import";
+import type { StoredPhotoPayload } from "@/lib/import/photo-import";
 
 type StoredWebPayload = WebExtractionResult & {
   source_url: string;
@@ -18,7 +19,7 @@ type StoredWebPayload = WebExtractionResult & {
   extraction_method: "structured" | "ai";
 };
 
-type ReviewPayload = StoredWebPayload | StoredPastePayload;
+type ReviewPayload = StoredWebPayload | StoredPastePayload | StoredPhotoPayload;
 
 function isWebPayload(payload: ReviewPayload): payload is StoredWebPayload {
   return "source_url" in payload;
@@ -63,6 +64,10 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
               Pulled from <span className="font-medium">{payload.source_name}</span> — check everything
               below before saving.
             </p>
+          ) : payload && job.kind === "PHOTO" ? (
+            <p className="mt-1 text-sm text-neutral-500">
+              AI-assisted extraction from your screenshots — check everything below before saving.
+            </p>
           ) : payload ? (
             <p className="mt-1 text-sm text-neutral-500">
               AI-assisted extraction from your pasted text — check everything below before saving.
@@ -77,6 +82,11 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
               That share only included a link, not the caption text — Instagram usually doesn&apos;t
               expose captions to the share sheet. The link is saved below; paste the caption in and
               we&apos;ll extract from it.
+            </p>
+          ) : job.kind === "PHOTO" ? (
+            <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+              Couldn&apos;t read a recipe from those screenshots. Fill in what you can below, or
+              discard and try again — clearer, less-cropped shots of the caption work best.
             </p>
           ) : (
             <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
@@ -138,7 +148,7 @@ function toInitialValues(
   if (!payload) {
     return {
       ...defaultRecipeFormValues(),
-      sourceType: kind === "PASTE" ? pasteSourceType(inputUrl) : "WEB",
+      sourceType: kind === "PASTE" ? pasteSourceType(inputUrl) : kind === "PHOTO" ? "MANUAL" : "WEB",
       sourceUrl: inputUrl ?? "",
     };
   }

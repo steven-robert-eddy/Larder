@@ -14,7 +14,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
   default: FakeAnthropic,
 }));
 
-const { extractRecipeWithAI, AiExtractionError } = await import("./ai-extract");
+const { extractRecipeWithAI, extractRecipeFromImages, AiExtractionError } = await import("./ai-extract");
 
 describe("extractRecipeWithAI", () => {
   beforeEach(() => {
@@ -57,6 +57,56 @@ describe("extractRecipeWithAI", () => {
     parseMock.mockRejectedValue(new Error("rate limited"));
 
     await expect(extractRecipeWithAI("text")).rejects.toThrow(AiExtractionError);
+  });
+});
+
+describe("extractRecipeFromImages", () => {
+  beforeEach(() => {
+    parseMock.mockReset();
+  });
+
+  it("sends one image content block per screenshot, in order, plus a trailing text block — no live API call made", async () => {
+    const extracted = {
+      title: "Sheet Pan Fajitas",
+      description: null,
+      servings_yield: 4,
+      servings_unit: "servings",
+      prep_minutes: 10,
+      cook_minutes: 20,
+      total_minutes: 30,
+      hero_image_url: null,
+      ingredients: [{ raw_text: "2 bell peppers, sliced", is_optional: false }],
+      steps: [{ text: "Roast at 425F for 20 minutes." }],
+      suggested_tags: [],
+    };
+    parseMock.mockResolvedValue({ parsed_output: extracted });
+
+    const result = await extractRecipeFromImages([
+      { base64: "aaa", mediaType: "image/png" },
+      { base64: "bbb", mediaType: "image/jpeg" },
+    ]);
+
+    expect(result).toEqual(extracted);
+    const call = parseMock.mock.calls[0][0];
+    expect(call.model).toBe("claude-sonnet-5");
+    const content = call.messages[0].content;
+    expect(content).toHaveLength(3);
+    expect(content[0]).toEqual({ type: "image", source: { type: "base64", media_type: "image/png", data: "aaa" } });
+    expect(content[1]).toEqual({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "bbb" } });
+    expect(content[2].type).toBe("text");
+    expect(call.output_config.format).toBeDefined();
+  });
+
+  it("throws AiExtractionError with no images, without touching the SDK", async () => {
+    await expect(extractRecipeFromImages([])).rejects.toThrow(AiExtractionError);
+    expect(parseMock).not.toHaveBeenCalled();
+  });
+
+  it("throws AiExtractionError when the model returns no parsed_output", async () => {
+    parseMock.mockResolvedValue({ parsed_output: null });
+    await expect(extractRecipeFromImages([{ base64: "aaa", mediaType: "image/png" }])).rejects.toThrow(
+      AiExtractionError,
+    );
   });
 });
 

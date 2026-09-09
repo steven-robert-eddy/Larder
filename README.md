@@ -22,15 +22,24 @@ Built so far:
   share sheet and feeds shared text straight into the same paste pipeline
   (`/import/share-target`). iOS Safari doesn't implement that API, but
   `/import/shortcut` walks through building the iPhone equivalent as a
-  one-time Shortcut (see "Notes on the data model" below for how both
-  wire into the same backend).
+  one-time Shortcut. When even that isn't practical — Instagram often
+  won't let you select/copy a caption in-app at all, and the share sheet
+  frequently hands over only the post's link — `/import/photo` accepts
+  one or more screenshots and reads the recipe straight out of them with
+  Claude's vision, no text selection needed at all; multiple screenshots
+  cover captions too long for one screen. See "Notes on the data model"
+  below for how all of these wire into the same backend.
 
 Capture (Phase 3) and meal planning (Phase 4) aren't built, and their
-tables are deliberately not scaffolded early. Dedicated Instagram/cookbook
-import UI (URL fetch attempt, vision extraction from photos) is Phase 3
-per the design doc's phase order — `/import/paste` plus the share target
-cover the same recipes-from-a-caption need today by hand, without
-scaffolding that phase's tables or vision/photo-capture work early.
+tables are deliberately not scaffolded early. The screenshot-vision
+import above is a deliberately narrow slice of Phase 3's vision work,
+pulled forward at explicit user request after every non-vision path hit
+a real, Instagram-specific wall (server-side fetch blocked, share sheet
+omitting captions, in-app text selection disabled). It's just "read text
+out of an uploaded image" — no camera capture, no cropping/rotation, no
+multi-page cookbook scanning, none of Phase 3's actual scope. Dedicated
+Instagram URL-fetch-with-fallback and full cookbook photo capture remain
+Phase 3, not started.
 
 ### Open scope within Phase 2
 
@@ -195,6 +204,19 @@ image so the VM never has to.
   distinguish "shared a URL" from "shared text" as cleanly as the Web
   Share Target spec does, so this keeps a same-value-in-both-fields
   Shortcut from wasting an AI call on a lone link.
+- **`/import/photo` reads text out of images with Claude's vision, not a
+  separate OCR step.** `extractRecipeFromImages` (`src/lib/import/ai-extract.ts`)
+  sends up to `MAX_PHOTOS` (6, see `actions.ts`) images as ordered image
+  content blocks in one message, with a vision-specific system prompt
+  telling the model to treat multiple screenshots as one continuous
+  scrolled caption and ignore UI chrome (like counts, usernames,
+  buttons). Screenshots aren't persisted anywhere — they're base64'd
+  in-memory, sent, and discarded; a failed extraction lands on a blank
+  review like any other no-data-found import, just without a "retry with
+  the original" box (there's no original left to retry with, unlike
+  paste's `rawPayload.text`). This is also why `next.config.ts` raises
+  `experimental.serverActions.bodySizeLimit` to `24mb` — Next's 1MB
+  default is nowhere near enough for several screenshots at once.
 
 ## Environment variables
 

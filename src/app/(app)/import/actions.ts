@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { runWebImport } from "@/lib/import/web-import";
 import { runPasteImport, retryPasteImport } from "@/lib/import/paste-import";
+import { runPhotoImport } from "@/lib/import/photo-import";
+import type { ScreenshotImage } from "@/lib/import/ai-extract";
 import { buildRecipeCreateInput } from "../recipes/actions";
 import { parseRecipeFormData, flattenZodErrors, type RecipeFormState } from "../recipes/form-schema";
 
@@ -58,6 +60,41 @@ export async function retryPasteImportAction(
   await retryPasteImport(jobId, text);
   revalidatePath(`/import/${jobId}/review`);
   redirect(`/import/${jobId}/review`);
+}
+
+export type PhotoImportFormState = { error: string | null };
+
+const MAX_PHOTOS = 6;
+const MAX_PHOTO_BYTES = 5_000_000;
+const ALLOWED_PHOTO_TYPES: Record<string, ScreenshotImage["mediaType"]> = {
+  "image/jpeg": "image/jpeg",
+  "image/png": "image/png",
+  "image/webp": "image/webp",
+  "image/gif": "image/gif",
+};
+
+export async function createPhotoImportAction(
+  _prevState: PhotoImportFormState,
+  formData: FormData,
+): Promise<PhotoImportFormState> {
+  const user = await requireUser();
+
+  const files = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { error: "Add at least one screenshot first." };
+  if (files.length > MAX_PHOTOS) return { error: `That's too many at once — up to ${MAX_PHOTOS} screenshots.` };
+
+  const images: ScreenshotImage[] = [];
+  for (const file of files) {
+    const mediaType = ALLOWED_PHOTO_TYPES[file.type];
+    if (!mediaType) return { error: `${file.name || "One of those files"} isn't a supported image type.` };
+    if (file.size > MAX_PHOTO_BYTES) return { error: `${file.name || "One of those screenshots"} is too large.` };
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    images.push({ base64: buffer.toString("base64"), mediaType });
+  }
+
+  const outcome = await runPhotoImport(user.id, images);
+  redirect(`/import/${outcome.jobId}/review`);
 }
 
 export async function confirmImportAction(

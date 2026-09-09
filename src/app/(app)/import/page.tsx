@@ -33,12 +33,18 @@ export default async function ImportPage() {
           <Link href="/import/paste" className="font-medium underline">
             Paste it in
           </Link>{" "}
-          instead. You can also share straight from Instagram&apos;s share sheet — on Android it
-          works automatically once Larder is installed as an app; on iPhone it takes a{" "}
+          if you can select the text. Can&apos;t select it, or it&apos;s too long for one
+          screenshot? <Link href="/import/photo" className="font-medium underline">
+            Upload screenshots instead
+          </Link>{" "}
+          — a screenshot always works, unlike copy/paste, and you can send several at once for a
+          long caption. On Android, Larder also shows up right in the share sheet once installed
+          as an app; on iPhone that takes a{" "}
           <Link href="/import/shortcut" className="font-medium underline">
             one-time Shortcuts setup
-          </Link>
-          , since Safari has no share-target API of its own.
+          </Link>{" "}
+          and only helps if Instagram actually hands over the caption text (it often doesn&apos;t) —
+          screenshots are the more reliable bet on iPhone.
         </p>
       </div>
 
