@@ -7,6 +7,7 @@ import { RecipeForm } from "../../../recipes/recipe-form";
 import { defaultRecipeFormValues, EMPTY_INGREDIENT, EMPTY_STEP, type RecipeFormInitialValues } from "../../../recipes/recipe-form-types";
 import { confirmImportAction } from "../../actions";
 import { DiscardButton } from "./discard-button";
+import { RetryPasteForm } from "./retry-paste-form";
 import type { WebExtractionResult } from "@/lib/import/json-ld";
 import type { StoredPastePayload } from "@/lib/import/paste-import";
 
@@ -68,14 +69,14 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
             </p>
           ) : job.kind === "PASTE" && rawText ? (
             <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
-              Couldn&apos;t extract a recipe from that text. Your original paste is below — fill in
-              the form by hand, or discard and try again.
+              Couldn&apos;t extract a recipe from that text. Edit and retry below, or fill in the
+              form by hand.
             </p>
           ) : job.kind === "PASTE" ? (
             <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
               That share only included a link, not the caption text — Instagram usually doesn&apos;t
-              expose captions to the share sheet. The link is saved below; paste the caption in by
-              hand, or fill in the form yourself.
+              expose captions to the share sheet. The link is saved below; paste the caption in and
+              we&apos;ll extract from it.
             </p>
           ) : (
             <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
@@ -92,13 +93,12 @@ export default async function ImportReviewPage({ params }: { params: Promise<{ j
         <DiscardButton jobId={jobId} />
       </div>
 
-      {rawText ? (
-        <details className="mb-6 rounded-lg border border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <summary className="cursor-pointer text-sm font-medium text-neutral-600 dark:text-neutral-400">
-            Your original paste
-          </summary>
-          <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm text-neutral-500">{rawText}</pre>
-        </details>
+      {job.kind === "PASTE" && !payload ? (
+        <RetryPasteForm
+          jobId={jobId}
+          defaultText={rawText ?? undefined}
+          label={rawText ? "Your original paste — edit and retry" : "Paste the caption"}
+        />
       ) : null}
 
       {payload && isWebPayload(payload) && payload.stored_hero_image_url ? (

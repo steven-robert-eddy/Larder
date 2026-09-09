@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { runWebImport } from "@/lib/import/web-import";
-import { runPasteImport } from "@/lib/import/paste-import";
+import { runPasteImport, retryPasteImport } from "@/lib/import/paste-import";
 import { buildRecipeCreateInput } from "../recipes/actions";
 import { parseRecipeFormData, flattenZodErrors, type RecipeFormState } from "../recipes/form-schema";
 
@@ -41,6 +41,23 @@ export async function createPasteImportAction(
 
   const outcome = await runPasteImport(user.id, text);
   redirect(`/import/${outcome.jobId}/review`);
+}
+
+export async function retryPasteImportAction(
+  jobId: string,
+  _prevState: PasteImportFormState,
+  formData: FormData,
+): Promise<PasteImportFormState> {
+  const user = await requireUser();
+  const job = await prisma.importJob.findFirst({ where: { id: jobId, userId: user.id, kind: "PASTE" } });
+  if (!job) return { error: "Import not found." };
+
+  const text = String(formData.get("text") ?? "").trim();
+  if (!text) return { error: "Paste the caption first." };
+
+  await retryPasteImport(jobId, text);
+  revalidatePath(`/import/${jobId}/review`);
+  redirect(`/import/${jobId}/review`);
 }
 
 export async function confirmImportAction(

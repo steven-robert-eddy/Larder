@@ -9,6 +9,36 @@ export type StoredPastePayload = Awaited<ReturnType<typeof extractRecipeWithAI>>
 };
 
 /**
+ * Runs AI extraction against an already-created job and writes the
+ * result. Shared by the initial paste/share-target import and by
+ * retryPasteImport (the "paste the caption" box shown when a share only
+ * carried a link — see design doc section 5.2's paste-primary contract).
+ */
+async function extractIntoJob(jobId: string, text: string): Promise<void> {
+  try {
+    const extracted = await extractRecipeWithAI(text);
+    const payload: StoredPastePayload = { ...extracted, extraction_method: "ai" };
+    await prisma.importJob.update({
+      where: { id: jobId },
+      data: { status: "NEEDS_REVIEW", parsedPayload: payload satisfies Prisma.InputJsonValue, errorMessage: null },
+    });
+  } catch (err) {
+    if (!(err instanceof AiExtractionError)) throw err;
+    // Never let extraction failure lose data (design doc section 12) — the
+    // pasted text is kept so this can still be reviewed and filled in by
+    // hand instead of the attempt just disappearing.
+    await prisma.importJob.update({
+      where: { id: jobId },
+      data: {
+        status: "NEEDS_REVIEW",
+        rawPayload: { text } satisfies Prisma.InputJsonValue,
+        errorMessage: err.message,
+      },
+    });
+  }
+}
+
+/**
  * Paste-a-blob manual import (design doc section 5.4) — the migration
  * path for the existing notes doc, and for anything the other import
  * paths fumble. No fetch, no HTML — the pasted text goes straight to the
@@ -27,27 +57,7 @@ export async function runPasteImport(
     data: { userId, kind: "PASTE", status: "RUNNING", inputUrl: sourceUrl ?? null },
   });
 
-  try {
-    const extracted = await extractRecipeWithAI(text);
-    const payload: StoredPastePayload = { ...extracted, extraction_method: "ai" };
-    await prisma.importJob.update({
-      where: { id: job.id },
-      data: { status: "NEEDS_REVIEW", parsedPayload: payload satisfies Prisma.InputJsonValue },
-    });
-  } catch (err) {
-    if (!(err instanceof AiExtractionError)) throw err;
-    // Never let extraction failure lose data (design doc section 12) — the
-    // pasted text is kept so this can still be reviewed and filled in by
-    // hand instead of the attempt just disappearing.
-    await prisma.importJob.update({
-      where: { id: job.id },
-      data: {
-        status: "NEEDS_REVIEW",
-        rawPayload: { text } satisfies Prisma.InputJsonValue,
-        errorMessage: err.message,
-      },
-    });
-  }
+  await extractIntoJob(job.id, text);
 
   return { jobId: job.id, status: "NEEDS_REVIEW" };
 }
@@ -59,7 +69,9 @@ export async function runPasteImport(
  * isn't reliably exposed to the share sheet — so this can't assume any
  * text arrived. When it didn't, skip the AI call (nothing to extract)
  * and land straight on a blank review with the link preserved, same
- * shape as any other no-data-found import.
+ * shape as any other no-data-found import. The review screen then offers
+ * a "paste the caption" box (retryPasteImport, below) rather than a dead
+ * end.
  */
 export async function runShareTargetImport(
   userId: string,
@@ -78,4 +90,15 @@ export async function runShareTargetImport(
   }
 
   return runPasteImport(userId, blob, sourceUrl);
+}
+
+/**
+ * Re-runs extraction on an existing PASTE job in place — used when a
+ * share only carried a link (see runShareTargetImport above) and the
+ * user then pastes the caption by hand on the review screen. Keeps the
+ * job's saved source_url instead of starting a disconnected new import.
+ */
+export async function retryPasteImport(jobId: string, text: string): Promise<PasteImportOutcome> {
+  await extractIntoJob(jobId, text);
+  return { jobId, status: "NEEDS_REVIEW" };
 }

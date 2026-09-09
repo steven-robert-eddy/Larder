@@ -177,7 +177,11 @@ image so the VM never has to.
   review with the link preserved rather than wasting a call on nothing.
   `ImportJob.inputUrl` is now populated for `PASTE`-kind jobs too when a
   source URL is available, and the review screen infers `sourceType:
-  "INSTAGRAM"` from an `instagram.com` link automatically.
+  "INSTAGRAM"` from an `instagram.com` link automatically. When a share
+  really did land link-only, the review screen shows a "paste the
+  caption" box (`retryPasteImport`) that re-extracts into the *same* job
+  instead of sending the user back to `/import/paste` to start over and
+  lose the saved link.
 
 ## Environment variables
 
