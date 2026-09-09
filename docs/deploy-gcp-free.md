@@ -130,6 +130,19 @@ Visit `https://<DOMAIN>` — Caddy will take a few seconds on first
 request to provision the certificate. On your phone, open the same URL
 and use "Add to Home Screen" to install it.
 
+**HTTP/3 is disabled on purpose** (`Caddyfile`'s `servers { protocols h1
+h2 }`). Caddy defaults to advertising HTTP/3 (QUIC, which runs over
+UDP), but GCP's "Allow HTTPS traffic" firewall preset only opens **TCP**
+443, and `docker-compose.prod.yml`'s `"443:443"` port mapping only
+forwards TCP too — so HTTP/3 connection attempts just vanish into
+nothing on both counts, with no error on either end. This surfaced as
+non-browser HTTPS clients (an iOS Shortcut's "Get Contents of URL," in
+particular) failing with "network connection was lost" and no trace in
+any log, while Safari kept working fine — browsers tend to fall back to
+HTTP/2 more defensively than a bare URLSession call does. Don't re-enable
+h3 here without also opening UDP 443 in both the Docker port mapping and
+the GCP firewall rule.
+
 ## Redeploying after code changes
 
 ```bash

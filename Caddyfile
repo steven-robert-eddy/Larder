@@ -1,3 +1,16 @@
+{
+	# HTTP/3 needs UDP/443, which the GCP firewall's "Allow HTTPS traffic"
+	# preset never opens (TCP only) — see docs/deploy-gcp-free.md. Caddy
+	# was advertising HTTP/3 support anyway (via Alt-Svc), and clients
+	# that took it up on that — notably iOS's Shortcuts networking stack —
+	# saw those QUIC packets vanish into the firewall with no error on
+	# either end, surfacing only as "network connection was lost" with
+	# nothing in any log. h1/h2 both run over TCP/443, which is open.
+	servers {
+		protocols h1 h2
+	}
+}
+
 {$DOMAIN} {
 	reverse_proxy app:3000
 	encode gzip
